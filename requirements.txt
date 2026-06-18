@@ -10,7 +10,7 @@ langchain-google-genai
 
 # Service layer (Phase 2 — API + WebSocket)
 fastapi>=0.110
-"uvicorn[standard]>=0.27"
+uvicorn[standard]>=0.27
 httpx>=0.26          # used by FastAPI TestClient and the demo WS client
 
 # Observability
