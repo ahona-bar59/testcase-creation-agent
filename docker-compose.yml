@@ -1,0 +1,32 @@
+# Local full-stack run (Phase 5). Build context is the repo root.
+#   docker compose up --build
+# Then open http://localhost:8080
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend-ai/Dockerfile
+    environment:
+      # Runtime config — set real provider creds here to go live.
+      LLM_OFFLINE_STUB: "true"
+      # LLM_PROVIDER: azure_openai
+      # AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY}
+      # AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
+      DEFAULT_PROJECT_ENABLED: "true"
+      LANGCHAIN_TRACING_V2: "false"
+    volumes:
+      - agent-data:/app/data
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  agent-data:

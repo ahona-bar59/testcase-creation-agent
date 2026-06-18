@@ -1,0 +1,31 @@
+# Core orchestration
+langgraph>=1.0,<2.0
+langchain>=1.0,<2.0
+langchain-core>=1.0,<2.0
+
+# LLM providers (default Azure OpenAI; others swappable from settings)
+langchain-openai
+langchain-anthropic
+langchain-google-genai
+
+# Service layer (Phase 2 — API + WebSocket)
+fastapi>=0.110
+"uvicorn[standard]>=0.27"
+httpx>=0.26          # used by FastAPI TestClient and the demo WS client
+
+# Observability
+langsmith>=0.3.0
+
+# Data models / settings
+pydantic>=2.0
+pydantic-settings>=2.0
+
+# Corporate TLS: verify against the OS trust store (fixes CERTIFICATE_VERIFY_FAILED
+# behind TLS-inspecting proxies). Auto-activated in build_llm().
+truststore>=0.9
+
+# Optional integrations (requirement fetch / existing suite / vector search)
+# Uncomment in environments where the backing systems are available.
+# neo4j
+# pymongo
+# azure-devops

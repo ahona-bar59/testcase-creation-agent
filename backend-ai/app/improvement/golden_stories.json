@@ -1,0 +1,38 @@
+[
+  {
+    "id": "golden-password-reset",
+    "source": "curated",
+    "expect_verdict": ["PASS", "ESCALATE"],
+    "input": {
+      "userStory": "As a registered user, I want to reset my password via an email link so that I can regain access if I forget it.",
+      "acceptanceCriteria": "AC-1: A logged-out user can request a reset by entering a registered email.\nAC-2: The reset link expires after 30 minutes.\nAC-3: An unregistered email shows a generic message and sends no link.\nAC-4: The new password must meet the complexity policy.",
+      "projectId": "REGRESSION",
+      "trigger_type": "manual",
+      "options": { "priority": "High", "includeEdgeCases": true }
+    }
+  },
+  {
+    "id": "golden-login",
+    "source": "curated",
+    "expect_verdict": ["PASS", "ESCALATE"],
+    "input": {
+      "userStory": "As a user I want to log in with email and password so I can access my account.",
+      "acceptanceCriteria": "AC-1: Valid credentials grant access.\nAC-2: Invalid password is rejected with an error.\nAC-3: Account locks after 5 failed attempts.",
+      "projectId": "REGRESSION",
+      "trigger_type": "manual",
+      "options": { "priority": "High" }
+    }
+  },
+  {
+    "id": "golden-checkout",
+    "source": "curated",
+    "expect_verdict": ["PASS", "ESCALATE"],
+    "input": {
+      "userStory": "As a shopper I want to pay for my cart with a credit card so that I can complete my purchase.",
+      "acceptanceCriteria": "AC-1: A valid card completes the payment and shows a confirmation.\nAC-2: A declined card shows an actionable error and does not charge.\nAC-3: The order total matches the cart total including tax.",
+      "projectId": "REGRESSION",
+      "trigger_type": "manual",
+      "options": { "priority": "High", "includeEdgeCases": true }
+    }
+  }
+]
