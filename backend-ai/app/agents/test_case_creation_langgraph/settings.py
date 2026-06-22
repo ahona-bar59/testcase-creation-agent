@@ -27,7 +27,7 @@ _DEFAULT_MODELS = {
     "azure_openai": "gpt-4o",
     "openai": "gpt-4o",
     "anthropic": "claude-3-5-sonnet-latest",
-    "google": "gemini-2.5-flash-lite",  # 2.0-flash is often limit:0; -lite is the most available free model
+    "google": "gemini-2.5-flash",  # grounded, reliable on this account
 }
 
 
