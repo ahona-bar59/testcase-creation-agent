@@ -115,6 +115,62 @@ def test_route_after_review_matrix():
     assert route_after_review({"review_results": {"verdict": "FAIL"}, "retry_count": 2}) == "format_output"
 
 
+# ── Self-correction: corrections must be APPLIED, not dropped ──────────────
+def _plan_with(*decisions):
+    """Build a minimal test_plan whose scenarios carry the given decisions."""
+    scenarios = []
+    for i, dec in enumerate(decisions, start=1):
+        scenarios.append({
+            "scenario_id": f"s{i}",
+            "scenario_text": f"scenario {i}",
+            "ac_refs": [f"AC-{i}"],
+            "suggested_test_type": "Positive",
+            "coverage_decision": {"scenario": f"scenario {i}", "decision": dec,
+                                  "matched_tc_id": None, "coverage_pct": 0.0, "reason": ""},
+        })
+    return {"scenarios": scenarios, "to_create": 0, "to_update": 0, "to_skip": 0,
+            "total_cases": len(scenarios), "work_avoided_pct": 0.0}
+
+
+def test_apply_corrections_applies_update_tasks():
+    from app.agents.test_case_creation_langgraph.nodes import _apply_corrections
+
+    plan = _plan_with("CREATE", "CREATE", "CREATE")  # TC-001, TC-002, TC-003
+    tasks = [{"task_type": "UPDATE", "tc_id": "TC-002", "scenario": "TC-002: ambiguous",
+              "required_changes": "Make step 2 concrete and verifiable."}]
+    out = _apply_corrections(plan, tasks)
+    # The UPDATE landed on the right scenario (index 1) and was NOT dropped.
+    assert out["scenarios"][1]["required_changes"] == "Make step 2 concrete and verifiable."
+    assert "Reviewer correction" in out["scenarios"][1]["coverage_decision"]["reason"]
+
+
+def test_apply_corrections_promotes_skip_to_update():
+    from app.agents.test_case_creation_langgraph.nodes import _apply_corrections
+
+    plan = _plan_with("CREATE", "SKIP")  # TC-002 is a SKIP
+    tasks = [{"task_type": "UPDATE", "tc_id": "TC-002", "scenario": "x",
+              "required_changes": "fix it"}]
+    out = _apply_corrections(plan, tasks)
+    # A SKIP can't be fixed by regeneration → promoted to UPDATE so the fix runs.
+    assert out["scenarios"][1]["coverage_decision"]["decision"] == "UPDATE"
+    assert out["to_update"] == 1
+
+
+def test_correction_changes_propagate_to_generated_case():
+    """End-to-end-ish: an UPDATE correction changes the regenerated case."""
+    from app.agents.test_case_creation_langgraph.nodes import _apply_corrections
+    from app.agents.test_case_creation_langgraph.tools import execute_plan_actions
+
+    plan = _plan_with("CREATE", "CREATE")
+    tasks = [{"task_type": "UPDATE", "tc_id": "TC-001", "scenario": "x",
+              "required_changes": "Remove ambiguous wording from step 2."}]
+    corrected = _apply_corrections(plan, tasks)
+    report = execute_plan_actions(corrected, "CORR1")
+    tc1 = next(t for t in report["test_cases"] if t["id"] == "TC-001")
+    blob = tc1["description"] + " " + " ".join(s["action"] for s in tc1["steps"])
+    assert "Remove ambiguous wording" in blob  # the correction is reflected, not ignored
+
+
 # ── Graph integration — golden story → PASS, 100% completeness ─────────────
 def test_full_run_passes_and_persists():
     seed_project_suite("GP1", [])

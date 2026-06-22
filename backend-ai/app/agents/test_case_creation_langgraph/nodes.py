@@ -107,22 +107,11 @@ def planner_node(state: TestCaseCreationState) -> dict:
     revision = state.get("hitl_revision")
     details = {"acceptance_criteria": acs, "options": options, "revision": revision}
 
-    # ReAct step 2 — scenarios
+    # ReAct step 2 — scenarios. The reviewer's free-text revision (if any) is
+    # passed through `details` and honoured by extract_scenarios' prompt — no
+    # brittle keyword matching here.
     scen_out = extract_scenarios(story, details)
     scenarios = scen_out["scenarios"]
-
-    # honour HITL revisions (reduce scope / add edge cases)
-    if revision:
-        r = revision.lower()
-        if "reduce" in r or "happy" in r:
-            scenarios = [s for s in scenarios if s["suggested_test_type"] == "Positive"] or scenarios
-        if "edge" in r:
-            scenarios.append({
-                "scenario_id": f"s{len(scenarios) + 1}",
-                "scenario_text": "Verify additional edge / boundary condition requested by reviewer",
-                "ac_refs": [],
-                "suggested_test_type": "Edge",
-            })
 
     # ReAct step 3 — search existing suite (keyword + vector)
     from .tools.shared import keywords_from  # noqa: PLC0415
@@ -221,26 +210,55 @@ def executor_node(state: TestCaseCreationState) -> dict:
 
 
 def _apply_corrections(test_plan: dict, correction_tasks: list[dict]) -> dict:
-    """Fold correction tasks back into the plan before re-execution."""
+    """Fold correction tasks back into the plan before re-execution.
+
+    Two task types, both must take effect (a dropped task wastes a retry):
+    - CREATE → append a new scenario to close a coverage gap.
+    - UPDATE → locate the failing case by tc_id and attach `required_changes`
+      so the Executor regenerates *that* case with the fix applied.
+
+    The Executor (`execute_plan_actions`) numbers cases positionally over the
+    plan's scenarios (TC-001 = scenarios[0], …), so we map tc_id → index the
+    same way to find the scenario behind a failing case.
+    """
     plan = dict(test_plan)
-    scenarios = list(plan.get("scenarios", []))
+    scenarios = [dict(s) for s in plan.get("scenarios", [])]
+    id_to_idx = {f"TC-{i + 1:03d}": i for i in range(len(scenarios))}
+
     for task in correction_tasks:
-        if task["task_type"] == "CREATE":
+        if task["task_type"] == "UPDATE":
+            idx = id_to_idx.get(task.get("tc_id"))
+            if idx is None:
+                continue  # unknown id — nothing to update
+            sc = dict(scenarios[idx])
+            sc["required_changes"] = task.get("required_changes", "")
+            cd = dict(sc.get("coverage_decision", {}))
+            # A SKIP case can't be fixed by regeneration — promote it to UPDATE
+            # so the corrected case is actually produced.
+            if cd.get("decision") == "SKIP":
+                cd["decision"] = "UPDATE"
+            cd["reason"] = "Reviewer correction: " + task.get("required_changes", "")
+            sc["coverage_decision"] = cd
+            scenarios[idx] = sc
+        elif task["task_type"] == "CREATE":
             scenarios.append({
                 "scenario_id": f"s{len(scenarios) + 1}",
                 "scenario_text": task["scenario"],
                 "ac_refs": [],
                 "suggested_test_type": "Positive",
+                "required_changes": task.get("required_changes", ""),
                 "coverage_decision": {
                     "scenario": task["scenario"], "decision": "CREATE",
                     "matched_tc_id": None, "coverage_pct": 0.0,
                     "reason": "Added during self-correction to close a coverage gap.",
                 },
             })
+
     plan["scenarios"] = scenarios
-    plan["to_create"] = sum(
-        1 for s in scenarios if s["coverage_decision"]["decision"] == "CREATE"
-    )
+    decisions = [s["coverage_decision"]["decision"] for s in scenarios]
+    plan["to_create"] = decisions.count("CREATE")
+    plan["to_update"] = decisions.count("UPDATE")
+    plan["to_skip"] = decisions.count("SKIP")
     plan["total_cases"] = len(scenarios)
     return plan
 

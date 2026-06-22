@@ -77,8 +77,11 @@ def generate_test_case(scenario: dict, project_id: str, tc_id: str) -> dict:
     slot = settings.llm_executor
     cd = scenario.get("coverage_decision", {})
     ttype = scenario.get("suggested_test_type", "Positive")
+    required_changes = scenario.get("required_changes")  # set on self-correction retries
     if not using_stub(slot):
         user = f"SCENARIO:\n{scenario}\nTYPE: {ttype}\nID: {tc_id}"
+        if required_changes:
+            user += f"\nREQUIRED CHANGES (a prior review flagged this — address it): {required_changes}"
         parsed = parse_json(call_llm(slot, GENERATE_CASE_PROMPT, user))
         if isinstance(parsed, dict) and parsed.get("steps"):
             parsed.setdefault("id", tc_id)
@@ -86,20 +89,29 @@ def generate_test_case(scenario: dict, project_id: str, tc_id: str) -> dict:
 
     tmpl = get_test_template(ttype, project_id)
     text = scenario["scenario_text"]
+    steps = [
+        {"step": 1, "action": "Set up the preconditions and open the relevant screen.",
+         "expected": "The system is in a valid starting state."},
+        {"step": 2, "action": f"Execute the scenario — {tmpl['step_hint']}.",
+         "expected": "The action is accepted and processed."},
+        {"step": 3, "action": "Observe the system response.",
+         "expected": f"Result matches the requirement for: {text}"},
+    ]
+    description = f"{tmpl['intro']}: {text}"
+    if required_changes:  # reflect the reviewer's correction so the retry differs
+        steps.append({
+            "step": len(steps) + 1,
+            "action": f"Apply the reviewer correction: {required_changes}",
+            "expected": "The corrected behaviour is verified and the prior issue no longer occurs.",
+        })
+        description += f" (revised: {required_changes})"
     return {
         "id": tc_id,
         "title": text if len(text) <= 80 else text[:77] + "...",
-        "description": f"{tmpl['intro']}: {text}",
+        "description": description,
         "priority": cd.get("priority", "Medium"),
         "type": ttype,
-        "steps": [
-            {"step": 1, "action": "Set up the preconditions and open the relevant screen.",
-             "expected": "The system is in a valid starting state."},
-            {"step": 2, "action": f"Execute the scenario — {tmpl['step_hint']}.",
-             "expected": "The action is accepted and processed."},
-            {"step": 3, "action": "Observe the system response.",
-             "expected": f"Result matches the requirement for: {text}"},
-        ],
+        "steps": steps,
         "decision": "CREATE",
         "existing_tc_id": None,
         "decision_reason": cd.get("reason", "No existing coverage."),
@@ -113,8 +125,11 @@ def update_test_case(scenario: dict, project_id: str, tc_id: str) -> dict:
     existing = fetch_test_case(existing_id) if existing_id else None
     slot = settings.llm_executor
     ttype = scenario.get("suggested_test_type", "Positive")
+    required_changes = scenario.get("required_changes")  # set on self-correction retries
     if not using_stub(slot):
         user = f"SCENARIO:\n{scenario}\nEXISTING:\n{existing}\nID: {tc_id}"
+        if required_changes:
+            user += f"\nREQUIRED CHANGES (a prior review flagged this — address it): {required_changes}"
         parsed = parse_json(call_llm(slot, UPDATE_CASE_PROMPT, user))
         if isinstance(parsed, dict) and parsed.get("steps"):
             parsed.setdefault("id", tc_id)
@@ -122,18 +137,27 @@ def update_test_case(scenario: dict, project_id: str, tc_id: str) -> dict:
             return parsed
 
     base_title = existing["title"] if existing else scenario["scenario_text"]
+    steps = [
+        {"step": 1, "action": "Run the existing case as documented.",
+         "expected": "Existing behaviour still holds (regression safe)."},
+        {"step": 2, "action": f"Add the new condition — {scenario['scenario_text']}.",
+         "expected": "The new condition is handled correctly."},
+    ]
+    description = f"Extend existing case {existing_id} to also cover: {scenario['scenario_text']}"
+    if required_changes:  # reflect the reviewer's correction so the retry differs
+        steps.append({
+            "step": len(steps) + 1,
+            "action": f"Apply the reviewer correction: {required_changes}",
+            "expected": "The corrected behaviour is verified and the prior issue no longer occurs.",
+        })
+        description += f" (revised: {required_changes})"
     return {
         "id": tc_id,
         "title": f"{base_title} (extended)",
-        "description": f"Extend existing case {existing_id} to also cover: {scenario['scenario_text']}",
+        "description": description,
         "priority": cd.get("priority", "Medium"),
         "type": ttype,
-        "steps": [
-            {"step": 1, "action": "Run the existing case as documented.",
-             "expected": "Existing behaviour still holds (regression safe)."},
-            {"step": 2, "action": f"Add the new condition — {scenario['scenario_text']}.",
-             "expected": "The new condition is handled correctly."},
-        ],
+        "steps": steps,
         "decision": "UPDATE",
         "existing_tc_id": existing_id,
         "decision_reason": cd.get("reason", "Partial existing coverage extended."),

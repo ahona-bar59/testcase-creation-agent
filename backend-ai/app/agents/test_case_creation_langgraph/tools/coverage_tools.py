@@ -23,8 +23,16 @@ def extract_scenarios(requirement: str, details: dict | None = None) -> dict:
     """Derive 5–10 distinct, testable scenarios. Returns ``{"scenarios": [...]}``."""
     details = details or {}
     slot = settings.llm_planner
+    revision = details.get("revision")
     if not using_stub(slot):
         user = f"REQUIREMENT:\n{requirement}\n\nDETAILS:\n{details}"
+        if revision:
+            # Free-text reviewer instruction (e.g. "focus on negative cases",
+            # "reduce to happy path"). The model adjusts the scenario set to it.
+            user += (
+                f"\n\nREVIEWER REVISION — regenerate the scenarios to satisfy this "
+                f"instruction exactly: {revision}"
+            )
         parsed = parse_json(call_llm(slot, EXTRACT_SCENARIOS_PROMPT, user))
         if isinstance(parsed, dict) and parsed.get("scenarios"):
             return parsed

@@ -37,6 +37,9 @@ HARD RULES:
 - Every scenario_text must be a concrete, specific sentence about the actual
   feature described, and map to the relevant acceptance-criterion id(s).
 - Cover positive, negative, edge, and boundary behaviour of THIS feature.
+- If a "REVIEWER REVISION" instruction is present, regenerate the scenario set to
+  satisfy it exactly (e.g. focus on negative cases, reduce to the happy path, add
+  more boundary cases).
 
 Return STRICT JSON: {"scenarios": [{"scenario_id","scenario_text","ac_refs",
 "suggested_test_type"}]}. test_type ∈ Positive|Negative|Edge|Boundary."""
