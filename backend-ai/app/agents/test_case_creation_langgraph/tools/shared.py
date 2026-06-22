@@ -74,8 +74,8 @@ def build_llm(slot: LLMSlot):
 
     _ensure_truststore()  # corporate TLS: trust the OS store before any live call
     provider = slot.provider
-    # Fail fast on provider errors so the graceful fallback in call_llm engages
-    # quickly instead of waiting through SDK retry/backoff (e.g. 429 retryDelay).
+    # A couple of retries to ride through transient provider blips (e.g. 503
+    # "model overloaded"); persistent errors still fall back via call_llm.
     if provider in ("azure_openai", "openai"):
         if provider == "azure_openai":
             from langchain_openai import AzureChatOpenAI
@@ -86,19 +86,19 @@ def build_llm(slot: LLMSlot):
                 azure_endpoint=slot.endpoint,
                 api_version=slot.api_version,
                 temperature=slot.temperature,
-                max_retries=0,
+                max_retries=2,
             )
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=slot.model, api_key=slot.api_key, temperature=slot.temperature, max_retries=0
+            model=slot.model, api_key=slot.api_key, temperature=slot.temperature, max_retries=2
         )
 
     if provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
         return ChatAnthropic(
-            model=slot.model, api_key=slot.api_key, temperature=slot.temperature, max_retries=0
+            model=slot.model, api_key=slot.api_key, temperature=slot.temperature, max_retries=2
         )
 
     if provider == "google":
@@ -108,7 +108,7 @@ def build_llm(slot: LLMSlot):
             model=slot.model,
             google_api_key=slot.api_key,
             temperature=slot.temperature,
-            max_retries=0,
+            max_retries=6,  # ride through transient 503s during the executor's burst of calls
         )
 
     raise ValueError(f"Unknown LLM provider: {provider!r}")

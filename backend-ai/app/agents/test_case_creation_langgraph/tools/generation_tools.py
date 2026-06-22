@@ -18,6 +18,19 @@ from .context_tools import fetch_test_case, get_test_template
 from .shared import call_llm, parse_json, using_stub
 
 
+def _stringify(value) -> str:
+    """Coerce a value to a readable string. Live LLMs sometimes return list
+    items as objects (e.g. {"risk": "..."}) where a string is expected."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for k in ("risk", "description", "name", "text", "title", "value"):
+            if isinstance(value.get(k), str):
+                return value[k]
+        return "; ".join(f"{k}: {v}" for k, v in value.items())
+    return str(value)
+
+
 # ── generate_test_plan (Planner) ──────────────────────────────────────────
 def generate_test_plan(analysis: dict, coverage_decisions: list[dict]) -> dict:
     """Assemble a decision-tagged TestPlan dict from analysis + coverage."""
@@ -43,9 +56,9 @@ def generate_test_plan(analysis: dict, coverage_decisions: list[dict]) -> dict:
     summary = (
         f"**Coverage plan** — {to_create} CREATE · {to_update} UPDATE · {to_skip} SKIP "
         f"· {work_avoided:.0f}% work avoided.\n\n"
-        f"Priority: {analysis.get('priority', 'Medium')} · "
-        f"Complexity: {analysis.get('complexity', 'Medium')} · "
-        f"Risks: {', '.join(analysis.get('risks', []))}."
+        f"Priority: {_stringify(analysis.get('priority', 'Medium'))} · "
+        f"Complexity: {_stringify(analysis.get('complexity', 'Medium'))} · "
+        f"Risks: {', '.join(_stringify(r) for r in analysis.get('risks', []))}."
     )
 
     return {

@@ -28,9 +28,16 @@ concrete correction tasks. Escalate when failures look structural rather than
 fixable by another drafting pass."""
 
 # ── LLM-backed tools ─────────────────────────────────────────────────────
-EXTRACT_SCENARIOS_PROMPT = """Extract 5–10 distinct, testable scenarios from the
-requirement. Cover positive, negative, edge, and boundary behaviour. Reference
-the acceptance criteria each scenario maps to.
+EXTRACT_SCENARIOS_PROMPT = """Extract 5–10 distinct, testable scenarios STRICTLY
+from the requirement and acceptance criteria provided in the user message.
+
+HARD RULES:
+- Scenarios must describe behaviour of THIS feature only. Do NOT invent unrelated
+  functionality (e.g. login, registration, shopping cart) that is not in the text.
+- Every scenario_text must be a concrete, specific sentence about the actual
+  feature described, and map to the relevant acceptance-criterion id(s).
+- Cover positive, negative, edge, and boundary behaviour of THIS feature.
+
 Return STRICT JSON: {"scenarios": [{"scenario_id","scenario_text","ac_refs",
 "suggested_test_type"}]}. test_type ∈ Positive|Negative|Edge|Boundary."""
 
@@ -44,11 +51,16 @@ ANALYZE_REQUIREMENT_PROMPT = """Analyze the requirement. Return STRICT JSON:
 {"components":[...],"risks":[...],"complexity":"Low|Medium|High",
 "priority":"High|Medium|Low","summary":"..."}."""
 
-GENERATE_CASE_PROMPT = """Write ONE complete test case for the given scenario.
+GENERATE_CASE_PROMPT = """Write ONE complete test case for EXACTLY the given
+scenario_text. Do NOT substitute or invent a different feature — the steps must
+test precisely what the scenario_text describes.
+
+The title must restate the scenario in a few words. Steps must be concrete and
+executable, each with a verifiable expected result.
+
 Return STRICT JSON: {"id","title","description","priority","type","steps":
 [{"step","action","expected"}],"decision":"CREATE","existing_tc_id":null,
-"decision_reason"}. Every step must be concrete and its expected result
-verifiable."""
+"decision_reason"}."""
 
 UPDATE_CASE_PROMPT = """Extend the EXISTING test case to also cover the scenario,
 without breaking its current coverage. Return STRICT JSON in the same TestCase
